@@ -69,12 +69,14 @@
            (set! A  (sqrt (+ (* I I) (* Q Q))))
            (let ((a 0.998))
              (set! Av (+ (* a Av) (* (- 1.0 a) A))))
-           (set! D (if (> A Av) 1 0))
+           (set! D (updateD (if (> A Av) 1 0)))
            (set! aI 0)
            (set! aQ 0)
            (print #`",|I| ,|Q| ,|A| ,|Av| ,|D|")
            (lp i)))))
 
+;;
+;;
 (define codes (make-vector 60))
 (define cp #f)
 (define cc 0)
@@ -87,7 +89,7 @@
         ((and (eq? 'M code) cp (= cp 59))
          (decode-wwv)))
   (if cp (vector-set! codes cp code))
-  (print #`"BBB ,|cp| ,|code|")
+  (print #`"# BBB ,|cp| ,|code|")
   (set! prev-code code)
   (if cp
     (begin
@@ -95,30 +97,30 @@
       (if (>= cp 60)
         (set! cp 0)))))
 
-
 (define (decode-wwv)
   ;; for now....
   (vector-for-each-with-index
    (lambda (i m)
-     (print #`"AAA ,|i| ,|m|"))
+     (print #`"## AAA ,|i| ,|m|"))
    codes)
   (set! cp 0))
 
 (define (updateD Dn)
-  (cond ((and (= D 0) (= Dn 1))
-         (if (and (eq? 'M prev-code)
-                  (<= 9 cc 11))
-           (set-next-code 'MM))
-         (set! cc 0))
-        ((and (= D 1) (= Dn 0))
-         (set-next-code (case cc
-                          ((1 2 3) 0)
-                          ((4 5 6) 1)
-                          ((7 8 9) 'M)
-                          (else
-                           (set! cp #f)
-                           'E)))))
-  (inc! cc)
+  (begin
+    (cond ((and (= D 0) (= Dn 1))
+           (if (and (eq? 'M prev-code)
+                    (<= 9 cc 11))
+             (set-next-code 'MM))
+           (set! cc 0))
+          ((and (= D 1) (= Dn 0))
+           (set-next-code (case cc
+                            ((1 2 3) 0)
+                            ((4 5 6) 1)
+                            ((7 8 9) 'M)
+                            (else
+                             (set! cp #f)
+                             'E)))))
+    (inc! cc))
   Dn)
 
 ;;
