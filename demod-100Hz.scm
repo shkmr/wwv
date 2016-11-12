@@ -56,9 +56,10 @@
   (let lp ((i 0))
     (cond ((= i n) #t)
           ((< T T100ms)
-           (let ((d (s16vector-ref inbuf i)))
-             (set! aI (+ aI (* (Ibase T) d)))
-             (set! aQ (+ aQ (* (Qbase T) d))))
+           (let ((d (s16vector-ref inbuf i))
+                 (a 0.998))
+             (set! aI (+ (* a aI) (* (- 1 a) (Ibase T) d)))
+             (set! aQ (+ (* a aQ) (* (- 1 a) (Qbase T) d))))
            (inc! T)
            (lp (+ i 1)))
           (else
@@ -189,7 +190,11 @@
                                         ByteRate: ,|ByteRate| \
                                         BlockAlign: ,|BlockAlign| \
                                         BitsPerSample: ,|BitsPerSample|")
-      (set-T SampleRate)))
+      (if (and (= fmt 1)
+               (= NumChannels 1)
+               (= BitsPerSample 16))
+        (set-T SampleRate)
+        (error "Unsupported data format"))))
 
   ;;
   (let*  ((ChunkID    (rstr 4 '()))
