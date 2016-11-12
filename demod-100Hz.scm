@@ -84,44 +84,58 @@
 (define prev-code #f)
 
 (define (set-next-code code)
-  (cond ((eq? code 'MM)
-         (set! cp 0))
-        ((and (eq? 'M code) cp (= cp 59))
-         (decode-wwv)))
-  (if cp (vector-set! codes cp code))
-  (print #`"# BBB ,|cp| ,|code|")
+  (define (set-code)
+    (print #`"## set-next cp: ,|cp| code: ,|code|")
+    (if cp
+      (begin
+        (vector-set! codes cp code)
+        (inc! cp)
+        (if (= cp 60) (set! cp 0)))))
+
   (set! prev-code code)
-  (if cp
-    (begin
-      (inc! cp)
-      (if (>= cp 60)
-        (set! cp 0)))))
+  (cond ((eq? code 'E)
+         (set! cp #f)
+         (set-code))
+        ((eq? code 'MM)
+         (set! cp 0)
+         (set-code))
+        ((and (eq? 'M code) cp (= cp 59))
+         (set-code)
+         (decode-wwv))
+        (else
+         (set-code))))
+
+(define (updateD Dn)
+  (cond ((and (= D 0) (= Dn 1))
+         (print #`"## Rising  edge cc: ,|cc|")
+         (case cc
+           ((19 20 21)
+            (if (eq? prev-code 'M)
+              (set-next-code 'MM)
+              (set-next-code 'MME)))
+           ((8 9 10 11) #t)
+           (else
+            (cond ((< cc 8)  (set-next-code 'too-short-period))
+                  ((> cc 21) (set-next-code 'too-long-period))
+                  (else      (set-next-code 'not-quite)))))
+         (set! cc 0))
+        ((and (= D 1) (= Dn 0))
+         (print #`"## Falling edge cc: ,|cc|")
+         (case cc
+           ((1 2 3) (set-next-code 0))
+           ((4 5 6) (set-next-code 1))
+           ((7 8 9) (set-next-code 'M))
+           (else    (set-next-code 'too-long-high)))))
+  (inc! cc)
+  Dn)
 
 (define (decode-wwv)
   ;; for now....
   (vector-for-each-with-index
    (lambda (i m)
-     (print #`"## AAA ,|i| ,|m|"))
+     (print #`"## codes[,|i|]: ,|m|"))
    codes)
   (set! cp 0))
-
-(define (updateD Dn)
-  (begin
-    (cond ((and (= D 0) (= Dn 1))
-           (if (and (eq? 'M prev-code)
-                    (<= 9 cc 11))
-             (set-next-code 'MM))
-           (set! cc 0))
-          ((and (= D 1) (= Dn 0))
-           (set-next-code (case cc
-                            ((1 2 3) 0)
-                            ((4 5 6) 1)
-                            ((7 8 9) 'M)
-                            (else
-                             (set! cp #f)
-                             'E)))))
-    (inc! cc))
-  Dn)
 
 ;;
 ;;
