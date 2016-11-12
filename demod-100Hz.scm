@@ -1,3 +1,4 @@
+; -*- mode: Scheme; compile-command: "sh ./run.sh"; -*-
 ;;;
 ;;;  Demodurate WWV's 100Hz sub-carrier
 ;;;
