@@ -25,23 +25,20 @@
     (else
      (error "Unsupported sample rate"))))
 
+;;
+(define Ts  0)  ; Time index between samples.
+(define Tm  #f) ; TIme index between markers.  #f means no marker found yet.
 
-(define Ts  0) ; Time index for sampling
-(define Tm  0) ; TIme index for marker
-
-;; Accumulators
-(define aI 0)
-(define aQ 0)
-
-;; Output
-(define I  0)
-(define Q  0)
-(define A  0)  ; Analog out = sqrt(I^2 + Q^2)
-(define Av 0)  ; Average Analog out
-(define D  0)  ; Digital data
-(define cM 0)  ; Mark correlation
-(define c1 0)  ; 1 correlatoin
-(define c0 0)  ; 2 correlation
+;; Output. Updated each samples
+(define I   0)  ; Filtered I
+(define Q   0)  ; Filtered Q
+(define A   0)  ; Analog out = sqrt(I^2 + Q^2)
+(define Av  0)  ; Average Analog out
+(define D   0)  ; Digitized A
+(define cMM 0)  ; Minute Mark correlation
+(define cM  0)  ; Mark correlation
+(define c1  0)  ; 1 correlatoin
+(define c0  0)  ; 2 correlation
 
 ;;;
 ;;;
@@ -58,7 +55,7 @@
         (else     -1)))
 
 ;;
-(define Aq (make-vector 10 0))
+(define Aq (make-vector 10 1))
 
 (define (push-A A)
   (vector-copy! Aq 0 Aq 1)
@@ -69,27 +66,17 @@
 (define-constant M1  (list +1 +1 +1 +1 +1 -1 -1 -1 -1 -1))
 (define-constant M0  (list +1 +1 -1 -1 -1 -1 -1 -1 -1 -1))
 
-(define (corr lis)
-  (let lp ((i 0) (P 0) (lis lis))
-    (cond ((null? lis) P)
+(define (corr-A M)
+  (let lp ((i 0) (P 0) (M M))
+    (cond ((null? M) P)
           (else
            (lp (+ i 1)
-               (+ P (* (car lis) (vector-ref Aq i)))
-               (cdr lis))))))
-
-(define (correlate A)
-  (push-A A)
-  (let ((cMM (corr MMM))
-        (cM  (corr MM))
-        (c1  (corr M1))
-        (c0  (corr M0)))
-    (format #t "## CORR MM: ~5d \
-                         M: ~5d \
-                         1: ~5d \
-                         0: ~5d ~%"
-            cMM cM c1 c0)))
-
+               (+ P (* (car M) (vector-ref Aq i)))
+               (cdr M))))))
 ;;
+(define aI 0)
+(define aQ 0)
+
 (define (process-buf inbuf n)
   (let lp ((i 0))
     (cond ((= i n) #t)
@@ -100,73 +87,50 @@
              (set! aQ (+ (* a aQ) (* (- 1 a) (Qbase Ts) d))))
            (inc! Ts)
            (lp (+ i 1)))
-          (else
+          ((= Ts T100ms)
            (set! Ts  0)
            (set! I  aI)
            (set! Q  aQ)
+           (set! aI  0)
+           (set! aQ  0)
            (set! A  (sqrt (+ (* I I) (* Q Q))))
            (let ((a 0.995))
              (set! Av (+ (* a Av) (* (- 1.0 a) A))))
-           (correlate (if (> A Av) 1 -1))
-           (set! aI 0)
-           (set! aQ 0)
-           (print #`",|I| ,|Q| ,|A| ,|Av| ,|D|")
-           (lp i)))))
+           (set! D (if (> A Av) 1 -1))
+           (push-A D)
+           (set! cMM (corr-A MMM))
+           (set! cM  (corr-A MM))
+           (set! c1  (corr-A M1))
+           (set! c0  (corr-A M0))
+           (detect-code)
+           (print #`",|I| ,|Q| ,|A| ,|Av| ,|D| ,|cMM| ,|cM| ,|c1| ,|c0|")
+           (lp i))
+          (else
+           (error "Something went wrong")))))
 
 ;;
+(define (detect-code)
+  (let ((M (cond ((and (> cM 7) (not Tm))
+                  (print #`"## detect: Marker found, setting Tm=0, cM: ,|cM|")
+                  (set! Tm 0)  'Mi)
+                 ((and (> cM 7) (or (= Tm 100)))
+                  (print #`"## detect: Sync'ed marker, setting Tm=0, cM: ,|cM|")
+                  (set! Tm 0)  'M1)
+                 ((and (> cM 7) (or (= Tm 200)))
+                  (print #`"## detect: Sync'ed marker, setting Tm=0, cM: ,|cM|")
+                  (set! Tm 0)  'M2)
+                 ((and (> cM 7) (> Tm 205))
+                  (print #`"## detect: Out of sync marker, setting Tm=0, cM: ,|cM|")
+                  (set! Tm 0)  'M0)
+                 ((> cM 7)    'MF) ; false marker
+                 ((> cMM 7)   'MM)
+                 ((> c1  7)     1)
+                 ((> c0  7)     0)
+                 (else #f))))
+    (if (and Tm (= (modulo Tm 10) 0))
+      (print #`"## detect: Tm: ,|Tm| code: ,|M|"))
+    (if Tm (inc! Tm))))
 ;;
-(define codes (make-vector 60))
-(define cp #f)
-(define cc 0)
-
-(define prev-code #f)
-
-(define (set-next-code code)
-  (define (set-code)
-    (print #`"## set-next cp: ,|cp| code: ,|code|")
-    (if cp
-      (begin
-        (vector-set! codes cp code)
-        (inc! cp)
-        (if (= cp 60) (set! cp 0)))))
-
-  (set! prev-code code)
-  (cond ((eq? code 'E)
-         (set! cp #f)
-         (set-code))
-        ((eq? code 'MM)
-         (set! cp 0)
-         (set-code))
-        ((and (eq? 'M code) cp (= cp 59))
-         (set-code)
-         (decode-wwv))
-        (else
-         (set-code))))
-
-(define (updateD Dn)
-  (cond ((and (= D 0) (= Dn 1))
-         (print #`"## Rising  edge cc: ,|cc|")
-         (case cc
-           ((19 20 21)
-            (if (eq? prev-code 'M)
-              (set-next-code 'MM)
-              (set-next-code 'MME)))
-           ((8 9 10 11) #t)
-           (else
-            (cond ((< cc 8)  (set-next-code 'too-short-period))
-                  ((> cc 21) (set-next-code 'too-long-period))
-                  (else      (set-next-code 'not-quite)))))
-         (set! cc 0))
-        ((and (= D 1) (= Dn 0))
-         (print #`"## Falling edge cc: ,|cc|")
-         (case cc
-           ((1 2 3) (set-next-code 0))
-           ((4 5 6) (set-next-code 1))
-           ((7 8 9) (set-next-code 'M))
-           (else    (set-next-code 'too-long-high)))))
-  (inc! cc)
-  Dn)
-
 (define (decode-wwv)
   ;; for now....
   (vector-for-each-with-index
@@ -180,22 +144,24 @@
 (define (run)
   (let ((inbuf (make-s16vector BUFSIZ 0)))
     (read-wav-header)
-    (print "# |I| |Q| |A| |Av| |D|")
+    (print #`"# 1:|I| 2:|Q| 3:|A| 4:|Av| 5:|D| 6:|cMM| 7:|cM| 8:|c1| 9:|c0|")
     (let lp ((n (read-data inbuf)))
-      (process-buf inbuf n)
-      (if (= n BUFSIZ)
-        (lp (read-data inbuf))
-        0))))
+      (cond ((eof-object? n) 0)
+            (else
+             (process-buf inbuf n)
+             (lp (read-data inbuf)))))))
 
 (define (main args)  (run))
 
 ;;
+;;   RIFF/WAVE
 ;;
 (define (read-data inbuf)
-  ;; We know its 16bit monoral
+  ;; To do support multi channel...
   (let ((m (read-uvector! inbuf)))
-    (if (eof-object? m)  0 m)))
+    m))
 
+;;
 (define-constant hsize 44)
 
 (define (read-wav-header)
@@ -239,11 +205,11 @@
            (BlockAlign    (ru16))
            (BitsPerSample (ru16)))
       (skip (- size 16))
-      (print #`"## ID fmt: ,|fmt| NumChannels: ,|NumChannels| \
-                                        SampeRate: ,|SampleRate| \
-                                        ByteRate: ,|ByteRate| \
-                                        BlockAlign: ,|BlockAlign| \
-                                        BitsPerSample: ,|BitsPerSample|")
+      (print #`"## wav: ID fmt: ,|fmt| NumChannels: ,|NumChannels| \
+                                       SampeRate: ,|SampleRate| \
+                                       ByteRate: ,|ByteRate| \
+                                       BlockAlign: ,|BlockAlign| \
+                                       BitsPerSample: ,|BitsPerSample|")
       (if (and (= fmt 1)
                (= NumChannels 1)
                (= BitsPerSample 16))
@@ -263,7 +229,7 @@
         (cond ((string=? "data" id) (ru32))
               ((string=? "fmt " id) (read-fmt) (lp (rstr 4 '())))
               (else (let ((siz (ru32)))
-                      (print #`"## skipping unknown ID: \",|id|\" ,|siz| bytes")
+                      (print #`"## wav: skipping unknown ID: \",|id|\" ,|siz| bytes")
                       (skip siz)
                       (lp (rstr 4 '())))))))
 ;;; EOF
