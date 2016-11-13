@@ -53,6 +53,44 @@
         ((< T (* T100Hz 3/4)) +1)
         (else     -1)))
 
+(define (comparator)
+  (set! A  (sqrt (+ (* I I) (* Q Q))))
+  (let ((a 0.995))
+    (set! Av (+ (* a Av) (* (- 1.0 a) A))))
+  (set! D (updateD (if (> A Av) 1 0))))
+
+(define Aq (make-vector 10 0))
+
+(define-constant MMM (list -1 -1 -1 -1 -1 -1 -1 -1 -1 -1))
+(define-constant MM  (list +1 +1 +1 +1 +1 +1 +1 +1 -1 -1))
+(define-constant M1  (list +1 +1 +1 +1 +1 -1 -1 -1 -1 -1))
+(define-constant M0  (list +1 +1 -1 -1 -1 -1 -1 -1 -1 -1))
+
+(define (push-A A)
+  (vector-copy! Aq 0 Aq 1)
+  (vector-set! Aq 9 A))
+  
+(define (correlate A)
+  (define (corr lis)
+    (let lp ((i 0)
+             (P 0)
+             (lis lis))
+      (if (null? lis)
+        P
+        (lp (+ i 1)
+            (+ P (* (car lis) (vector-ref Aq i)))
+            (cdr lis)))))
+  (push-A A)
+  (let ((cMM (corr MMM))
+        (cM  (corr MM))
+        (c1  (corr M1))
+        (c0  (corr M0)))
+    (format #t "## CORR MM: ~5d \
+                         M: ~5d \
+                         1: ~5d \
+                         0: ~5d ~%"
+            cMM cM c1 c0)))
+
 (define (process-buf inbuf n)
   (let lp ((i 0))
     (cond ((= i n) #t)
@@ -67,10 +105,8 @@
            (set! T  0)
            (set! I  aI)
            (set! Q  aQ)
-           (set! A  (sqrt (+ (* I I) (* Q Q))))
-           (let ((a 0.998))
-             (set! Av (+ (* a Av) (* (- 1.0 a) A))))
-           (set! D (updateD (if (> A Av) 1 0)))
+           (comparator)
+           (correlate (if (> A Av) 1 -1))
            (set! aI 0)
            (set! aQ 0)
            (print #`",|I| ,|Q| ,|A| ,|Av| ,|D|")
