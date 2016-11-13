@@ -6,7 +6,6 @@ run()
     for i in data/*.wav; do
         run1 $i
     done
-
 }
 
 run1()
