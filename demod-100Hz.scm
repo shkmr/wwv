@@ -165,8 +165,6 @@
     m))
 
 ;;
-(define-constant hsize 44)
-
 (define (read-wav-header)
 
   (define (skip n)
@@ -235,11 +233,10 @@
                      (lp (rstr 4))))))
               (else
                (print #`"## wav: LIST ,|id|: ,|size| bytes")))))
-
     (let* ((buf (read-uvector <u8vector> size))
            (p   (open-input-uvector buf)))
       (with-input-from-port p read-subchunk)))
-  ;;
+
   (let*  ((ChunkID    (rstr 4))
           (ChunkSize  (ru32))
           (Format     (rstr 4)))
