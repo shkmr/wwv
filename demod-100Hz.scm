@@ -1,9 +1,10 @@
-; -*- mode: Scheme; compile-command: "sh ./run.sh"; -*-
+; -*- mode: Scheme; compile-command: "./run.sh all"; -*-
 ;;;
 ;;;  Demodurate WWV's 100Hz sub-carrier
 ;;;
 (use math.const)
 (use gauche.uvector)
+(use gauche.vport)
 
 (define-constant BUFSIZ 20)
 
@@ -154,10 +155,12 @@
 (define (main args)  (run))
 
 ;;
-;;   RIFF/WAVE
+;;   RIFF/WAV
+;;   http://soundfile.sapp.org/doc/WaveFormat/
+;;
 ;;
 (define (read-data inbuf)
-  ;; To do support multi channel...
+  ;; TODO: support multi channel...
   (let ((m (read-uvector! inbuf)))
     m))
 
@@ -173,13 +176,16 @@
         (error "Unexpected EOF")
         (skip (- n 1)))))
 
-  (define (rstr n r)
-    (if (<= n 0)
-      (list->string (map integer->char (reverse r)))
-      (let ((c (read-byte)))
-        (if (eof-object? c)
-          (error "Unexpected EOF"))
-        (rstr (- n 1) (cons c r)))))
+  #;(define (rstr n) (read-string n))
+  (define (rstr n)
+    (let lp  ((n n)
+              (r '()))
+      (if (= n 0)
+        (list->string (map integer->char (reverse r)))
+        (let ((c (read-byte)))
+          (cond ((eof-object? c) c)
+                ((zero? c) (lp (- n 1) (cons (char->integer #\space) r)))
+                (else (lp (- n 1) (cons c r))))))))
 
   (define (ru16)
     (let* ((d0 (read-byte))
@@ -216,20 +222,38 @@
         (set-T SampleRate)
         (error "Unsupported data format"))))
 
+  (define (read-LIST size)
+    (define (read-subchunk)
+      (let ((id (rstr 4)))
+        (cond ((string=? id "INFO")
+               (print #`"## wav: LIST INFO:")
+               (let lp ((id (rstr 4)))
+                 (if (eof-object? id)
+                   #t
+                   (let ((str (rstr (ru32))))
+                     (print #`"## wav:    ,|id|:\",|str|\"")
+                     (lp (rstr 4))))))
+              (else
+               (print #`"## wav: LIST ,|id|: ,|size| bytes")))))
+
+    (let* ((buf (read-uvector <u8vector> size))
+           (p   (open-input-uvector buf)))
+      (with-input-from-port p read-subchunk)))
   ;;
-  (let*  ((ChunkID    (rstr 4 '()))
+  (let*  ((ChunkID    (rstr 4))
           (ChunkSize  (ru32))
-          (Format     (rstr 4 '())))
+          (Format     (rstr 4)))
 
     (if (not (and (string=? ChunkID "RIFF")
                   (string=? Format  "WAVE")))
-      (error "Not a wav file")))
+      (error #`"Not a wav file \",|ChunkID|\"  \",|Format|\"")))
 
-      (let lp ((id (rstr 4 '())))
+      (let lp ((id (rstr 4)))
         (cond ((string=? "data" id) (ru32))
-              ((string=? "fmt " id) (read-fmt) (lp (rstr 4 '())))
+              ((string=? "fmt " id) (read-fmt)  (lp (rstr 4)))
+              ((string=? "LIST" id) (read-LIST (ru32)) (lp (rstr 4)))
               (else (let ((siz (ru32)))
                       (print #`"## wav: skipping unknown ID: \",|id|\" ,|siz| bytes")
                       (skip siz)
-                      (lp (rstr 4 '())))))))
+                      (lp (rstr 4)))))))
 ;;; EOF
