@@ -25,8 +25,9 @@
     (else
      (error "Unsupported sample rate"))))
 
-;; Time index
-(define T  0)
+
+(define Ts  0) ; Time index for sampling
+(define Tm  0) ; TIme index for marker
 
 ;; Accumulators
 (define aI 0)
@@ -38,6 +39,9 @@
 (define A  0)  ; Analog out = sqrt(I^2 + Q^2)
 (define Av 0)  ; Average Analog out
 (define D  0)  ; Digital data
+(define cM 0)  ; Mark correlation
+(define c1 0)  ; 1 correlatoin
+(define c0 0)  ; 2 correlation
 
 ;;;
 ;;;
@@ -53,33 +57,27 @@
         ((< T (* T100Hz 3/4)) +1)
         (else     -1)))
 
-(define (comparator)
-  (set! A  (sqrt (+ (* I I) (* Q Q))))
-  (let ((a 0.995))
-    (set! Av (+ (* a Av) (* (- 1.0 a) A))))
-  (set! D (updateD (if (> A Av) 1 0))))
-
+;;
 (define Aq (make-vector 10 0))
+
+(define (push-A A)
+  (vector-copy! Aq 0 Aq 1)
+  (vector-set! Aq 9 A))
 
 (define-constant MMM (list -1 -1 -1 -1 -1 -1 -1 -1 -1 -1))
 (define-constant MM  (list +1 +1 +1 +1 +1 +1 +1 +1 -1 -1))
 (define-constant M1  (list +1 +1 +1 +1 +1 -1 -1 -1 -1 -1))
 (define-constant M0  (list +1 +1 -1 -1 -1 -1 -1 -1 -1 -1))
 
-(define (push-A A)
-  (vector-copy! Aq 0 Aq 1)
-  (vector-set! Aq 9 A))
-  
+(define (corr lis)
+  (let lp ((i 0) (P 0) (lis lis))
+    (cond ((null? lis) P)
+          (else
+           (lp (+ i 1)
+               (+ P (* (car lis) (vector-ref Aq i)))
+               (cdr lis))))))
+
 (define (correlate A)
-  (define (corr lis)
-    (let lp ((i 0)
-             (P 0)
-             (lis lis))
-      (if (null? lis)
-        P
-        (lp (+ i 1)
-            (+ P (* (car lis) (vector-ref Aq i)))
-            (cdr lis)))))
   (push-A A)
   (let ((cMM (corr MMM))
         (cM  (corr MM))
@@ -91,21 +89,24 @@
                          0: ~5d ~%"
             cMM cM c1 c0)))
 
+;;
 (define (process-buf inbuf n)
   (let lp ((i 0))
     (cond ((= i n) #t)
-          ((< T T100ms)
+          ((< Ts T100ms)
            (let ((d (s16vector-ref inbuf i))
                  (a 0.998))
-             (set! aI (+ (* a aI) (* (- 1 a) (Ibase T) d)))
-             (set! aQ (+ (* a aQ) (* (- 1 a) (Qbase T) d))))
-           (inc! T)
+             (set! aI (+ (* a aI) (* (- 1 a) (Ibase Ts) d)))
+             (set! aQ (+ (* a aQ) (* (- 1 a) (Qbase Ts) d))))
+           (inc! Ts)
            (lp (+ i 1)))
           (else
-           (set! T  0)
+           (set! Ts  0)
            (set! I  aI)
            (set! Q  aQ)
-           (comparator)
+           (set! A  (sqrt (+ (* I I) (* Q Q))))
+           (let ((a 0.995))
+             (set! Av (+ (* a Av) (* (- 1.0 a) A))))
            (correlate (if (> A Av) 1 -1))
            (set! aI 0)
            (set! aQ 0)
