@@ -94,7 +94,7 @@
            (set! aI  0)
            (set! aQ  0)
            (set! A  (sqrt (+ (* I I) (* Q Q))))
-           (let ((a 0.992))
+           (let ((a 0.98))
              (set! Av (+ (* a Av) (* (- 1.0 a) A))))
            (set! D (if (> A Av) 1 -1))
            (push-A D)
