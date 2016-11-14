@@ -1,4 +1,4 @@
-; -*- mode: Scheme; compile-command: "./run.sh all"; -*-
+; -*- mode: Scheme; compile-command: "./run.sh clean all"; -*-
 ;;;
 ;;;  Demodurate WWV's 100Hz sub-carrier
 ;;;
@@ -185,6 +185,7 @@
   (inc!-S))
 
 ;;
+;; https://en.wikipedia.org/wiki/WWV_(radio_station)
 ;;
 (define (decode-wwv l)
 
