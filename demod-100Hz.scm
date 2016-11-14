@@ -2,6 +2,8 @@
 ;;;
 ;;;  Demodurate WWV's 100Hz sub-carrier
 ;;;
+;;;                        written by skimu@mac.com
+;;;
 (use math.const)
 (use gauche.uvector)
 (use gauche.vport)
