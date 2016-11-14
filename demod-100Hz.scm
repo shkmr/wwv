@@ -94,7 +94,7 @@
            (set! aI  0)
            (set! aQ  0)
            (set! A  (sqrt (+ (* I I) (* Q Q))))
-           (let ((a 0.995))
+           (let ((a 0.992))
              (set! Av (+ (* a Av) (* (- 1.0 a) A))))
            (set! D (if (> A Av) 1 -1))
            (push-A D)
@@ -159,6 +159,7 @@
                  (else #f))))
     (if (and Tm (= (modulo Tm 10) 0))
       (begin (print #`"## detect: Tm: ,|Tm| code: ,|M|")
+             (flush)
              (every-second M)))
     (if Tm (inc! Tm))))
 

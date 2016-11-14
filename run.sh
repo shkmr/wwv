@@ -21,6 +21,13 @@ run1()
      echo; echo) >> info.log
 }
 
+sox()
+{
+    rec -c 1 -b 16 -r 8000 -t wav - 2>/dev/null \
+        |  gosh ./demod-100Hz.scm \
+        |  grep '\(wav\|det\|dec\|codes\)' 
+}
+
 clean()
 {
     rm -f *~ *.det *.dat *.log *.codes
@@ -29,6 +36,7 @@ clean()
 while [ $1 ]; do
     case $1 in
 	all)   run;;
+        sox)   sox;;
 	clean) clean;;
         *) run1 $1;;
     esac
