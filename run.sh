@@ -15,7 +15,6 @@ run1()
     b=$(basename $i .wav)
     gosh demod-100Hz.scm < $i | tee $b.dat | grep '^## decode: '
     sed -n '/detect/s/^## //p' $b.dat > $b.det
-    sed -n '/every/s/^## //p' $b.dat > $b.codes
     (echo "File: $i Run: $(date)";
      sed -n '/## wav:/s/^## wav: //p' $b.dat;
      echo; echo) >> info.log
