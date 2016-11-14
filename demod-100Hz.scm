@@ -150,7 +150,7 @@
                   (print #`"## detect: Sync'ed marker, setting Tm=0, cM: ,|cM|")
                   (set! Tm 0)  'M2)
                  ((and (> cM 7) (> Tm 205))
-                  (print #`"## detect: Out of sync marker, setting Tm=0, cM: ,|cM|")
+                  (print #`"## detect: Out of sync marker at Tm: ,|Tm|, setting Tm=0, cM: ,|cM|")
                   (set! Tm 0)  'M0)
                  ((> cM 7)    'MF) ; false marker
                  ((> cMM 7)   'MM) ; minute marker
