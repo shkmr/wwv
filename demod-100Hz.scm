@@ -36,43 +36,47 @@
 (define A   0)  ; Analog out = sqrt(I^2 + Q^2)
 (define Av  0)  ; Average Analog out
 (define D   0)  ; Digitized A
+(define PHI 0)  ; angle of (I,Q), updated only when D=1.
 (define cMM 0)  ; Minute Mark correlation
-(define cM  0)  ; Mark correlation
-(define c1  0)  ; 1 correlatoin
-(define c0  0)  ; 2 correlation
+(define cMA 0)  ; Marker correlation
+(define cB1 0)  ; 1 correlatoin
+(define cB0 0)  ; 0 correlation
 
 ;;
 ;;
-(define (Ibase T)  (cos (/ (* 2 pi T) T100Hz)))
-(define (Qbase T)  (sin (/ (* 2 pi T) T100Hz)))
+(define (Imix d)  (* d (cos (/ (* 2 pi Ts) T100Hz))))
+(define (Qmix d)  (* d (sin (/ (* 2 pi Ts) T100Hz))))
 
-(define (IbaseP T)
-  (if (< T (* T100Hz 2/4)) +1 -1))
+(define (ImixP d)
+  (if (< T (* T100Hz 2/4))
+    (*  1 d)
+    (* -1 d)))
 
-(define (QbaseP T)
-  (cond ((< T (* T100Hz 1/4)) -1)
-        ((< T (* T100Hz 3/4)) +1)
+(define (QmixP d)
+  (cond ((< Ts (* T100Hz 1/4)) (* -1 d))
+        ((< Ts (* T100Hz 3/4)) (* +1 d))
         (else     -1)))
 
 ;;
-(define Aq (make-vector 10 1))  ; init with 1 to avoid false MM.
+(define Dq (make-vector 10 1))  ; init with 1 to avoid false MM.
 
-(define (push-A A)
-  (vector-copy! Aq 0 Aq 1)
-  (vector-set! Aq 9 A))
+(define (push-Dq D)
+  (vector-copy! Dq 0 Dq 1)
+  (vector-set! Dq 9 D))
 
-(define-constant MMM (list -1 -1 -1 -1 -1 -1 -1 -1 -1 -1))
-(define-constant MM  (list +1 +1 +1 +1 +1 +1 +1 +1 -1 -1))
-(define-constant M1  (list +1 +1 +1 +1 +1 -1 -1 -1 -1 -1))
-(define-constant M0  (list +1 +1 -1 -1 -1 -1 -1 -1 -1 -1))
+;; symbols
+(define-constant sMM (list -1 -1 -1 -1 -1 -1 -1 -1 -1 -1)) ; Minute Maker
+(define-constant sMA (list +1 +1 +1 +1 +1 +1 +1 +1 -1 -1)) ; Marker
+(define-constant sB1 (list +1 +1 +1 +1 +1 -1 -1 -1 -1 -1)) ; 1
+(define-constant sB0 (list +1 +1 -1 -1 -1 -1 -1 -1 -1 -1)) ; 0
 
-(define (corr-A M)
-  (let lp ((i 0) (P 0) (M M))
-    (cond ((null? M) P)
+(define (corr-Dq sXX)
+  (let lp ((i 0) (P 0) (X sXX))
+    (cond ((null? X) P)
           (else
            (lp (+ i 1)
-               (+ P (* (car M) (vector-ref Aq i)))
-               (cdr M))))))
+               (+ P (* (car X) (vector-ref Dq i)))
+               (cdr X))))))
 ;;
 (define aI 0)
 (define aQ 0)
@@ -83,8 +87,8 @@
           ((< Ts T100ms)
            (let ((d (s16vector-ref inbuf i))
                  (a 0.998))
-             (set! aI (+ (* a aI) (* (- 1 a) (Ibase Ts) d)))
-             (set! aQ (+ (* a aQ) (* (- 1 a) (Qbase Ts) d))))
+             (set! aI (+ (* a aI) (* (- 1 a) (Imix d))))
+             (set! aQ (+ (* a aQ) (* (- 1 a) (Qmix d)))))
            (inc! Ts)
            (lp (+ i 1)))
           ((= Ts T100ms)
@@ -97,13 +101,14 @@
            (let ((a 0.98))
              (set! Av (+ (* a Av) (* (- 1.0 a) A))))
            (set! D (if (> A Av) 1 -1))
-           (push-A D)
-           (set! cMM (corr-A MMM))
-           (set! cM  (corr-A MM))
-           (set! c1  (corr-A M1))
-           (set! c0  (corr-A M0))
-           (detect-code)
-           (print #`",|I| ,|Q| ,|A| ,|Av| ,|D| ,|cMM| ,|cM| ,|c1| ,|c0|")
+           (if (= D 1) (set! PHI (atan Q I)))
+           (push-Dq D)
+           (set! cMM (corr-Dq sMM))
+           (set! cMA (corr-Dq sMA))
+           (set! cB1 (corr-Dq sB1))
+           (set! cB0 (corr-Dq sB0))
+           (print #`",|I| ,|Q| ,|A| ,|Av| ,|D| ,|PHI| ,|cMM| ,|cMA| ,|cB1| ,|cB0|")
+           (sync-and-detect)
            (lp i))
           (else
            (error "Something went wrong")))))
@@ -135,48 +140,38 @@
   (display "## codes: ")
   (let ((l (get-codes)))
     (print l)
-    (if (or (eq? (car l) 'MM1)
-            (eq? (car l) 'MM2))
+    (if (eq? (car l) 'MM1)
       (decode-wwv l))))
 
-(define (detect-code)
-  (let ((M (cond ((and (> cM 7) (not Tm))
-                  (print #`"## detect: Marker found, setting Tm=0, cM: ,|cM|")
+(define (sync-and-detect)
+  (let ((M (cond ((and (> cMA 7) (not Tm))
+                  (print #`"## detect: Marker found, setting Tm=0, cMA: ,|cMA|")
                   (set! Tm 0)  'Mi)
-                 ((and (> cM 7) (or (= Tm 100)))
-                  (print #`"## detect: Sync'ed marker, setting Tm=0, cM: ,|cM|")
-                  (set! Tm 0)  'M1)
-                 ((and (> cM 7) (or (= Tm 200)))
-                  (print #`"## detect: Sync'ed marker, setting Tm=0, cM: ,|cM|")
-                  (set! Tm 0)  'M2)
-                 ((and (> cM 7) (> Tm 205))
-                  (print #`"## detect: Out of sync marker at Tm: ,|Tm|, setting Tm=0, cM: ,|cM|")
-                  (set! Tm 0)  'M0)
-                 ((> cM 7)    'MF) ; false marker
-                 ((> cMM 7)   'MM) ; minute marker
-                 ((> c1  7)   'B1)
-                 ((> c0  7)   'B0)
+                 ((and (> cMA 7) (= (modulo Tm 100) 0))
+                  (print #`"## detect: Sync'ed marker: Tm: ,|Tm| cMA: ,|cMA|")
+                  (set! Tm 0)  'MS)
+                 ((> cMA 7)
+                  (cond ((> Tm 200)
+                         (print #`"## detect: Out of sync marker: Tm: ,|Tm|, setting Tm=0, cMA: ,|cMA|")
+                         (set! Tm 0) 'M0)
+                        (else        'MF))) ; false marker
+                 ((> cMM 7)    'MM) ; minute marker
+                 ((> cB1 7)    'B1)
+                 ((> cB0 7)    'B0)
                  (else #f))))
-    (if (and Tm (= (modulo Tm 10) 0))
-      (begin (print #`"## detect: Tm: ,|Tm| code: ,|M|")
-             (flush)
-             (every-second M)))
+    (if (and Tm (= (modulo Tm 10) 0)) (every-second M))
     (if Tm (inc! Tm))))
 
 (define prev-code #f)
 
 (define (every-second m)
   (define (MM? x) (or (eq? x 'MM0) (eq? x 'MM1) (eq? x 'MM2)))
+  (print #`"## detect: Tm: ,|Tm| code: ,|m|") (flush)
+
   (cond ((not m) #f)
-        ((and (eq? m 'MM) (eq? prev-code 'M1))
+        ((and (eq? m 'MM) (eq? prev-code 'MS))
          (if (MM? (vector-ref codes S))
            (vector-set! codes S 'MM1)
-           (vector-set! codes S 'MM0))
-         (set! S0 S)
-         (disp-codes))
-        ((and (eq? m 'MM) (eq? prev-code 'M2))
-         (if (MM? (vector-ref codes S))
-           (vector-set! codes S 'MM2)
            (vector-set! codes S 'MM0))
          (set! S0 S)
          (disp-codes))
