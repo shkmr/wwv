@@ -233,7 +233,8 @@
            (Y1    (begin (rbcd)))      ; 51 52 53 54
            (DST2  (begin (read-byte)))); 55
       (print #`"## decode: ,|H1|,|H0|:,|M1|,|M0| \
-                ,|D2|,|D1|,|D0|-th day of year 20,|Y1|,|Y0|.")))
+                ,|D2|,|D1|,|D0|-th day of year 20,|Y1|,|Y0|.")
+      (flush)))
 
   (let ((p (open-input-uvector
             (list->u8vector
@@ -321,6 +322,7 @@
                                        ByteRate: ,|ByteRate| \
                                        BlockAlign: ,|BlockAlign| \
                                        BitsPerSample: ,|BitsPerSample|")
+      (flush)
       (if (and (= fmt 1)
                (= NumChannels 1)
                (= BitsPerSample 16))
