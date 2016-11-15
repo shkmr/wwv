@@ -154,7 +154,9 @@
                   (cond ((> Tm 200)
                          (print #`"## detect: Out of sync marker: Tm: ,|Tm|, setting Tm=0, cMA: ,|cMA|")
                          (set! Tm 0) 'M0)
-                        (else        'MF))) ; false marker
+                        (else
+                         (print #`"## detect: False marker: Tm: ,|Tm|, setting Tm=0, cMA: ,|cMA|")
+                         'MF)))
                  ((> cMM 7)    'MM) ; minute marker
                  ((> cB1 7)    'B1)
                  ((> cB0 7)    'B0)
