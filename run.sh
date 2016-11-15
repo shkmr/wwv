@@ -41,7 +41,7 @@ sox()
 
 clean()
 {
-    rm -f *~ *.det *.dat *.log *.codes
+    rm -f *~ *.det *.dat *.log *.codes *.chk
 }
 
 while [ $1 ]; do
