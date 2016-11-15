@@ -21,6 +21,17 @@ run1()
      echo; echo) >> info.log
 }
 
+make_ref()
+{
+    gosh demod-100Hz.scm < data/wwv9.wav > data/wwv9.ref
+}
+
+check()
+{
+    gosh demod-100Hz.scm < data/wwv9.wav | tee wwv9.chk | grep '^## decode: '
+    diff wwv9.chk data/wwv9.ref
+}
+
 sox()
 {
     rec -c 1 -b 16 -r 8000 -t wav - 2>/dev/null \
@@ -37,6 +48,8 @@ while [ $1 ]; do
     case $1 in
 	all)   run;;
         sox)   sox;;
+        make_ref) make_ref;;
+        check) check;;
 	clean) clean;;
         *) run1 $1;;
     esac
