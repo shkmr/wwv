@@ -107,7 +107,7 @@
            (set! cMA (corr-Dq sMA))
            (set! cB1 (corr-Dq sB1))
            (set! cB0 (corr-Dq sB0))
-           (print #`",|I| ,|Q| ,|A| ,|Av| ,|D| ,|PHI| ,|cMM| ,|cMA| ,|cB1| ,|cB0|")
+           (print #`",|Ts| ,|I| ,|Q| ,|A| ,|Av| ,|D| ,|PHI| ,|cMM| ,|cMA| ,|cB1| ,|cB0|")
            (sync-and-detect)
            (lp i))
           (else
@@ -255,7 +255,7 @@
 (define (run)
   (let ((inbuf (make-s16vector BUFSIZ 0)))
     (read-wav-header)
-    (print "# 1:|I| 2:|Q| 3:|A| 4:|Av| 5:|D| 6:|PHI| 7:|cMM| 8:|cMA| 9:|cB1| 10:|cB0|")
+    (print "# 1:Ts 2:|I| 3:|Q| 4:|A| 5:|Av| 6:|D| 7:|PHI| 8:|cMM| 9:|cMA| 10:|cB1| 11:|cB0|")
     (let lp ((n (read-data inbuf)))
       (cond ((eof-object? n) 0)
             (else
