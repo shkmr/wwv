@@ -255,7 +255,7 @@
 (define (run)
   (let ((inbuf (make-s16vector BUFSIZ 0)))
     (read-wav-header)
-    (print #`"# 1:|I| 2:|Q| 3:|A| 4:|Av| 5:|D| 6:|cMM| 7:|cM| 8:|c1| 9:|c0|")
+    (print "# 1:|I| 2:|Q| 3:|A| 4:|Av| 5:|D| 6:|PHI| 7:|cMM| 8:|cMA| 9:|cB1| 10:|cB0|")
     (let lp ((n (read-data inbuf)))
       (cond ((eof-object? n) 0)
             (else
